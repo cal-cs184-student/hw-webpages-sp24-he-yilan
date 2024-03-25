@@ -1,25 +1,56 @@
 <html>
-	<head>
-	</head>
-	<body>
-		<h3>CS184/284A Homework Webpages</h3>
-		<br><br>
-		<a href="/hw1/index.html">Homework 1</a>
-		<br><br>
-		<a href="/hw2/index.html">Homework 2</a>
-		<br><br>
-		<a href="/hw3/index.html">Homework 3</a>
-		<br><br>
-		<a href="/hw4/index.html">Homework 4</a>
-	</body>
-	<script>
-		var links = document.body.getElementsByTagName("a")
-		var a = window.location.href.indexOf(".io")
-		var repo_name = window.location.href.substring(a+3)
-		for(var i = 0; i < links.length; i++){
-			var link = links[i]
-			var actual_name = link.href.substring(link.href.indexOf(".io")+4)
-			link.href = repo_name + actual_name
+<head>
+	<style>
+		body {
+			position: relative;
+			background-color: #343434;
+			color: white;
+			font-family: sans-serif;
 		}
-	</script>
+		table { width: 100%; }
+		td {
+			margin-left: 20px;
+			text-align: center;
+			transition: 0.5s;
+			background-color: #8f00c3;
+			padding: 10px;
+			margin-left: 100px;
+			border-radius: 10px;
+		}
+		td:hover {
+			padding-left: 20px;
+			padding-right: 20px;
+			transition: 0.5s;
+			background-color: #75039e;
+		}
+		td a {
+			color: white;
+			text-decoration: none;
+		}
+		.center {
+			width: 50%;
+			margin: 0;
+			position: absolute;
+			top: 40%;
+			left: 50%;
+			-ms-transform: translate(-50%, -40%);
+			transform: translate(-50%, -40%);
+			text-align: center;
+		}
+	</style>
+</head>
+<body>
+<div class="center">
+	<h1>Elana's CS184 Project Webpages</h1>
+	<br />
+	<table>
+		<tr>
+			<td><a href="hw1/index.html">Homework 1</a></td>
+			<td><a href="hw2/index.html">Homework 2</a></td>
+			<td><a href="hw3/index.html">Homework 3</a></td>
+			<td><a href="hw4/index.html">Homework 4</a></td>
+		</tr>
+	</table>
+</div>
+</body>
 </html>
