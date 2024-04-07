@@ -1,7 +1,968 @@
+<!DOCTYPE html>
 <html>
-	<head>
-	</head>
-	<body>
-		Homework 4 index.html here
-	</body>
+<head>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+
+	<link type="text/css" rel="stylesheet" href="style.css">
+
+	<script>
+		MathJax = {
+			tex: {
+				inlineMath: [['$', '$'], ['\\(', '\\)']]
+			}
+		};
+	</script>
+	<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+	<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+	<link type="image/png" rel="icon" href="images/icon.png">
+
+	<title>CS 184 Homework 4: Cloth Sim</title>
+</head>
+<body>
+<div class="menu">
+	<ul>
+		<li class="nonlogo"><a href="#overview">OVERVIEW</a></li>
+		<li class="nonlogo"><a href="#part1">PART 1</a></li>
+		<li class="nonlogo"><a href="#part2">PART 2</a></li>
+		<li class="nonlogo"><a href="#part3">PART 3</a></li>
+		<li class="nonlogo"><a href="#part4">PART 4</a></li>
+		<li class="nonlogo"><a href="#part5">PART 5</a></li>
+		<li class="nonlogo"><a href="#ec">EXTRA CREDIT</a></li>
+		<li class="nonlogo"><a href="https://github.com/cal-cs184-student/hw4-clothsim-sp24-hashmap" target="_blank">CODE <i style="font-size:12px" class="fa">&#xf08e;</i></a></li>
+		<li class="rightlogo"><a href="https://cs184.eecs.berkeley.edu/sp24/docs/hw4" target="_blank">CS 184, Spring 2024<br />Homework 4: Cloth Sim</a></li>
+	</ul>
+</div>
+
+<div class="submenu">
+	<a class="anchor" id="overview"></a>
+	<div class="header">CS 184/284A: Computer Graphics and Imaging, Spring 2024</div>
+	<div class="subheader center">Homework 4: Cloth Sim</div>
+	<div class="subheader center">Nikhil Ograin, Elana Ho</div>
+	<div class="center"><a href="https://cal-cs184-student.github.io/hw-webpages-sp24-Boomaa23/hw4/">https://cal-cs184-student.github.io/hw-webpages-sp24-Boomaa23/hw4/</a></div>
+	<br /><hr />
+
+	<div class="content-item overview">
+		<div class="subheader center">Overview</div>
+		<p>In this project, we simulate the properties and movement of cloth. Fundamentally, the cloth is modeled by a system of point masses and springs. By adjusting parameters including the spring constant, density, and damping, we are able to represent various material properties of the cloth. To enhance the realism of the cloth's movement and appearance, we also add support for collisions between the cloth and itself and other objects in the scene. As a result, the cloth is able to interact with other objects and itself in a realistic manner. Furthermore, we implement various shaders using GLSL (OpenGL Shading Language). By using vertex and fragment shaders, we create different shading effects including diffuse shading, Blinn-Phong shading, texture-mapping, displacement and bump mapping, and mirror-like environment-mapped reflections. In addition, we implement several additional features: cube collision objects, wind simulation, adjustable collision objects, a rainbow mirror shader, and a screenshot hotkey.</p>
+		<br /><hr />
+	</div>
+
+	<div class="content-item part1">
+		<a class="anchor" id="part1"></a>
+		<div class="subheader center">Part 1: Masses and springs</div>
+
+		<p>To model the cloth, we use a system of point masses and springs.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part1_pinned2-allconstraint-close.PNG" class="single-image" /><br />
+					<span>Figure 1: closeup view of pinned2.json with all constraints enabled</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p><span class="code">Cloth::buildGrid</span> initializes a grid of masses and establishes springs between them to simulate the behavior of the cloth model. To create the grid, we generate <span class="code">num_width_points</span> by <span class="code">num_height_points</span> point masses using a nested loop. For each point, we calculate the position vector <span class="code">v</span>. If the orientation of the cloth is horizontal, the $y$-coordinate is set to 1, and the $x$ and $z$ coordinates vary. If vertical, the $z$-coordinate is set to a small random offset between -1/1000 and 1/1000, while the $x$ and $y$ coordinates vary. This random offset is calculated from the <span class="code">rand()</span> function which returns a random value between 0 and <span class="code">RAND_MAX</span>. By dividing by <span class="code">RAND_MAX</span> we get a $[0,1]$ floating point value, which can then be scaled up to $[0, 2/1000]$ by dividing by 500. To get the final range $[-1/1000, 1/1000]$ we then subtract 1/1000. This results in a grid of point masses spanning the cloth's dimensions. <span class="code">point_masses</span> stores all the point masses in row-major order with the point's position and whether it is pinned. A point mass is defined as pinned if its $(x, y)$ position (defined in the code as $(w, h)$) is contained within the <span class="code">pinned</span> array.</p>
+
+		<p>Once the point masses have been generated, we connect each point mass and adjacent point masses with springs. For each point mass, springs are created to its left and above it (for structural), diagonally upper-left and upper-right (for shearing), as well as to the point mass two spaces away to its left and two spaces above it (for bending).</p>
+
+		<p>With this system of point masses and springs, we see this flat cloth wireframe below. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part1_pinned2-bendingconstraint.PNG" class="single-image" /><br />
+					<span>Figure 2: pinned2.json with without shearing</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part1_pinned2-shearingconstraint.PNG" class="single-image" /><br />
+					<span>Figure 2: pinned2.json with shearing</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part1_pinned2-allconstraint.PNG" class="single-image" /><br />
+					<span>Figure 3: pinned2.json with all constraints enabled</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>To speed up execution of this function, we use a single nested loop for initialization of both point masses and springs. This is made possible by the <span class="code">reserve(int capacity)</span> function, which expands a <span class="code">std::vector</span> to have a capacity equal to the capacity value passed. This means the vector is guaranteed to not resize until that capacity is reached, which is important because we want to ensure that point masses remain at contiguous places in memory for spring initialization. This is because, for each point mass we create multiple springs which connect back to previously created point masses. If these point masses were to not be at contiguous memory locations, we could not use pointer arithmetic to get a point mass at a previously filled index in <span class="code">point_masses</span>.</p>
+
+		<br /><hr />
+	</div>
+
+	<div class="content-item part2">
+		<a class="anchor" id="part2"></a>
+		<div class="subheader center">Part 2: Simulation via numerical integration</div>
+
+		Having set up the cloth modeled by a system of masses and springs, we simulate the cloth's movement by incorporate the physical equations of motion to apply forces on the point masses.
+
+		<h3>Task 1: Compute total force acting on each point mass</h3>
+
+		<p>The function <span class="code">Cloth::simulate</span> runs one timestep of time length <span class="code">delta_t</span> in the simulation, applying the accelerations uniformly to all point masses in the cloth. </p>
+
+		<p>First, we calculated the total force acting on each point mass. The external forces, such as gravity, uniformly affect the cloth. For this function, they are stored in the parameter <span class="code">external_accelerations</span>. Following Newton's second law $F = ma$, we took the sum of the external accelerations and multiplied it by the mass, resulting in the total force. This external force was then applied to every point mass by setting the <span class="code">​​forces</span> vector on each.</p>
+
+		<p>Next, we implemented the spring correction forces. For each spring in the cloth, if the constraints were enabled, we set the forces of the two masses on its ends according to Hooke's law:</p>
+
+		<p>$$F_s = k_s * (|| p_a - p_b|| - l)$$</p>
+
+		<ul>
+			<li>$k_s$: spring constant. Because the bending constraint is weaker than shearing and structural constraints, $k_s$ is multiplied by a small constant if the spring type is bending</li>
+			<li>$p_a$, $p_b$: positions of the two masses</li>
+			<li>$l$: the spring's rest length</li>
+		</ul>
+
+		<p>To properly apply this force, the spring correction force is added to one point mass and subtracted from the other. Which one is picked is somewhat arbitrary.</p>
+
+		<p>In code, the spring stores the parameters required to calculate the spring correction forces. This includes the positions of the two point masses which the spring connects (<span class="code">pm_a</span> and <span class="code">pm_b</span>) as well as the rest length (<span class="code">​​rest_length</span>).</p>
+
+		<p>Notably, we only want to apply these spring correction forces if the spring type being applied is enabled. To do this we check the <span class="code">ClothParameters</span> passed to <span class="code">simulate(...)</span> for each spring that is applied, and cross-check that the spring being applied is the same type of spring that is enabled.</p>
+
+		<h3>Task 2: Use Verlet integration to compute new point mass positions</h3>
+
+		<p>To compute the new positions of each point mass using Verlet integration, we utilize the forces acting on each point mass at the current time step. </p>
+
+		<p>For each point mass that is not pinned, Verlet integration calculates the point mass's new position $x_{t + dt}$ at timestep $t + dt$ using the following equation: </p>
+
+		<p>$$x_{t + dt} = x_t + (1 - d) \cdot (x_t - x_{t-dt}) + a_t * dt^2$$</p>
+
+		<ul>
+			<li>$x_t$: current position</li>
+			<li>$d$: damping term between 0 and 1 to help simulate loss of energy due to factors such as friction and heat loss</li>
+			<li>$a_t$: current total acceleration from all forces </li>
+			<li>$dt$: <span class="code">delta_t</span> </li>
+		</ul>
+
+		<p>Notably, we want to apply the acceleration corresponding to all forces which each point mass is experiencing individually. As such, we re-acquire the force on the point mass from the <span class="code">forces</span> variable and divide by the provided mass to return the acceleration. This acceleration will be different from the external accelerations passed to the <span class="code">simulate(...)</span> function.</p>
+
+		<h3>Task 3: Constrain position updates</h3>
+
+		<p>To prevent strings from being excessively deformed during each timestep, we apply a constraint based on the <a href="https://www.cs.rpi.edu/~cutler/classes/advancedgraphics/S14/papers/provot_cloth_simulation_96.pdf">SIGGRAPH 1995 Provot paper</a>. </p>
+
+		<p>For a given step of the simulation, the length of each spring cannot extend past 10% of its <span class="code">rest_length</span> . If a change in position in the point masses would make the length surpass this limit, then the positions are corrected by the following amount: </p>
+
+		<p>$$c = (|| p_a - p_b|| - l \cdot 1.1) \cdot \frac{ p_a - p_b}{|| p_a - p_b||} $$</p>
+
+		<p>To apply the correct, we take into account multiple cases:</p>
+
+		<ul>
+			<li>If only one of the point masses are pinned, then adjust the position of the other by $c$.</li>
+			<li>If neither point mass is pinned, then adjust both positions by $c / 2$.</li>
+			<li>If both are pinned, then do nothing. </li>
+		</ul>
+
+		<p>Our implementation of this function stores the vector connecting the positions of both point masses as <span class="code">diff</span>, then stores the norm of that vector as <span class="code">dist</span>. This enables us to reuse the <span class="code">dist</span> both in checking for an overextended spring (i.e. the conditional) and in calculating a <span class="code">correction</span> vector. This <span class="code">correction</span> vector accounts for the spring length exceeding the maximum of 10% per timestep in the direction of the spring (i.e. between the point masses).</p>
+
+		<p>With default settings, we can achieve the following result from <span class="code">pinned4.json</span> in a resting state.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_pinned4-wire.PNG" class="single-image" /><br />
+					<span>Figure 4: pinned4.json wireframe </span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_pinned4-normal1.PNG" class="single-image" /><br />
+					<span>Figure 5: pinned4.json with normal shading </span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_pinned4-normal2.PNG" class="single-image" /><br />
+					<span>Figure 6: pinned4.json with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<h3>Experimenting with Parameters</h3>
+
+		<p>The movement of the cloth is defined by the parameters $k_s$ (spring constant), density, and damping. By adjusting each of these parameters, we can simulate different types of cloth. </p>
+
+		<p>The default settings are as follows: </p>
+
+		<ul>
+			<li>$k_s = 5000 N/m$</li>
+			<li>density = $15 g/cm^2$</li>
+			<li>damping = $0.2\%$</li>
+		</ul>
+
+		<p>While maintaining the default density and damping, we first experiment with the spring constant by setting it at $5000 N/m$, $500 N/m$, and $50 N/m$. </p>
+
+		<p>The default spring constant is $5000 N/m$. Due to the strength of the spring constant, the cloth falls smoothly and the surface remains relatively flat.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-wire.PNG" class="single-image" /><br />
+					<span>Figure 7: wireframe of pinned2.json with $k_s = 5000 N/m$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-normal.PNG" class="single-image" /><br />
+					<span>Figure 8: pinned2.json with $k_s = 5000 N/m$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>As $k_s$ decreases, the cloth bends and is warped more easily. The area between the two pinned corners is much looser. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks500-wire.PNG" class="single-image" /><br />
+					<span>Figure 9: wireframe of pinned2.json with $k_s = 500 N/m$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-normal.PNG" class="single-image" /><br />
+					<span>Figure 10: pinned2.json with $k_s = 500 N/m$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks50-wire.PNG" class="single-image" /><br />
+					<span>Figure 11: wireframe of pinned2.json with $k_s = 50 N/m$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks50-normal.PNG" class="single-image" /><br />
+					<span>Figure 12: pinned2.json with $k_s = 50 N/m$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>To observe the effect of density, we maintain the default $k_s$ and damping and set density to $15 g/cm^2$, $150 g/cm^2$, and $1500 g/cm^2$. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-wire.PNG" class="single-image" /><br />
+					<span>Figure 13: wireframe of pinned2.json with density $ = 15 g/cm^2$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-normal.PNG" class="single-image" /><br />
+					<span>Figure 14: pinned2.json with density $ = 15 g/cm^2$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_density150-wire.PNG" class="single-image" /><br />
+					<span>Figure 15: wireframe of pinned2.json with density $ = 150 g/cm^2$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_density150-normal.PNG" class="single-image" /><br />
+					<span>Figure 16: pinned2.json with density $ = 150 g/cm^2$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_density1500-wire.PNG" class="single-image" /><br />
+					<span>Figure 17: wireframe of pinned2.json with density $ = 1500 g/cm^2$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_density1500-normal.PNG" class="single-image" /><br />
+					<span>Figure 18: pinned2.json with density $ = 1500 g/cm^2$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>As density increases, the cloth ripples more. This effect occurs because at higher density, the cloth has more mass, resulting in more forces accumulated at each point mass. Consequently, more forces weigh on the cloth, pulling it downward and causing more wrinkles. Thus, increasing density has an effect similar to decreasing $k_s$.</p>
+
+		<p>Finally, experimenting with damping, we observe the cloth at damping levels $0%$, $0.2%$, and $1%$.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_damping0-wire.PNG" class="single-image" /><br />
+					<span>Figure 19: wireframe of pinned2.json with dampling $ = 0\%$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_damping0-normal.PNG" class="single-image" /><br />
+					<span>Figure 20: pinned2.json with density $ = 0\%$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-wire.PNG" class="single-image" /><br />
+					<span>Figure 21: wireframe of pinned2.json with dampling $ = 0.2\%$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_ks5000-normal.PNG" class="single-image" /><br />
+					<span>Figure 22: pinned2.json with density $ = 0.2\%$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part2_damping1-wire.PNG" class="single-image" /><br />
+					<span>Figure 23: wireframe of pinned2.json with dampling $ = 1\%$</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part2_damping1-normal.PNG" class="single-image" /><br />
+					<span>Figure 24: pinned2.json with density $ = 1\%$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>With $0\%$ damping (the lowest setting), the cloth falls quickly and swings back and forth, moving constantly, as if blown by strong winds. This occurs because there is no loss of energy due to friction or other forces, so the velocity is constant, never decreasing. On the other hand, with $1\%$ damping (the highest setting), the cloth falls gradually and is very stiff, standing motionless at the final position. This slower movement is caused by more damping, mitigating the effects of forces, such as gravity, reducing the rapid movement of point masses. Consequently, more of the energy applied to the cloth is dissipated, leading to a more controlled motion.</p>
+
+		<p>On the other hand, with $1%$ damping (the highest setting), the cloth falls gradually and is very stiff, standing motionless at the final position. This slower movement is caused by more damping, mitigating the effects of forces, such as gravity, reducing the rapid movement of point masses. Consequently, more of the energy applied to the cloth is dissipated, leading to a more controlled motion.</p>
+		<br /><hr />
+	</div>
+
+	<div class="content-item part3">
+		<a class="anchor" id="part3"></a>
+		<div class="subheader center">Part 3: Handling collisions with other objects</div>
+		<p>To allow cloths to interact with other objects in the scene realistically, we add support for cloth collision with spheres and planes (or as seen in Part 6, other collision objects). </p>
+
+		<h3>Task 1: Handling collisions with spheres</h3>
+
+		<p>To handle collisions with spheres we implement <span class="code">Sphere::collide</span>. Given a point mass <span class="code">pm</span>, if it would intersect the sphere, we adjust its position to be on the surface of the sphere. </p>
+
+		<p>To determine an intersection, we check whether the position of <span class="code">pm</span> falls within 1 radius from the origin. If so, we compute the tangent point by extending the line between the sphere's origin and the point mass position to the sphere's surface. Then, we compute the correction vector needed to reach the tangent point from the <span class="code">last_position</span> of <span class="code">pm</span>. We then update the point mass's position by applying the correction vector scaled down by the friction coefficient. This adjustment ensures that the point mass stays just outside the sphere's surface.</p>
+
+		<p>Finally, we update <span class="code">Cloth::simulate</span> to account for potential collisions between each point mass and object by calling the <span class="code">collide()</span> function on each <span class="code">CollisionObject</span>.</p>
+
+		<p>As the cloth falls, it wraps around the sphere and arrives at the final resting state shown below.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part3_sphere-ks500.PNG" class="single-image" /><br />
+					<span>Figure 25: sphere.json with default settings in the final resting state</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>When we adjust the spring constant $k_s$, we see the properties of the cloth change. As $k_s$ increases, the cloth stiffens. Because it is less flexible, it wraps around the sphere less, and there are fewer folds. This occurs because a higher spring constant makes the cloth stronger and able to hold its shape. In contrast, as $k_s$ decreases, the cloth loosens, wrapping around the sphere more closely, and there are more wrinkles. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part3_sphere-ks500.PNG" class="single-image" /><br />
+					<span>Figure 26: sphere.json with $k_s = 500 N/m$ with normal shading</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part3_sphere-ks5000.PNG" class="single-image" /><br />
+					<span>Figure 27: sphere.json with $k_s = 5000 N/m$ with normal shading</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part3_sphere-ks50000.PNG" class="single-image" /><br />
+					<span>Figure 28: sphere.json with $k_s = 50000 N/m$ with normal shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<h3>Task 2: Handling collisions with planes</h3>
+
+		<p>Similar to spheres, we handle collisions with planes by implementing <span class="code">Plane::collide</span> . Given a point mass <span class="code">pm</span>, if it would intersect the plane, we adjust its position to be on the surface of the plane. </p>
+
+		<p>We first check whether the point mass moved from one side of the plane to the other in the last time step. To do this, we compute the projection between the designated point on the plane and the point mass’s position, in the direction of the plane’s normal. In effect, this computes the distance between the closest point on the plane to the point mass. This operation is performed twice; once for the upcoming (next) position of the point mass, and once more for the previous (last) position of the point mass.</p>
+
+		<p>If the sign of both projections are complementary, this means the point mass crossed over the plane. In this case, we calculate the tangent point, the point where the point mass would hit the plane if it traveled in a straight line (again utilizing the projection). We then compute a correction vector to apply to the point mass's <span class="code">last_position</span> to reach the surface, offset by a small constant <span class="code">SURFACE_OFFSET</span>. Lastly, we reassign the point mass's position to be the sum of its <span class="code">last_position</span> and the correction vector scaled down by a friction coefficient. This adjustment ensures that the point mass stays just above the plane's surface and loses some energy due to friction (i.e. stops eventually in the absence of additional external forces).</p>
+
+		<p>After having implemented these changes, we can see that as the cloth falls, it stops when it collides with the plane, lying on its surface. Note there are some visible artifacts, which are a result of projecting, rotating, and then taking a screenshot of the viewport. The plane rests completely above the substrate without physics-based artifacts.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part3_plane.PNG" class="single-image" /><br />
+					<span>Figure 29: wireframe of plane.json</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+		<br /><hr />
+	</div>
+
+	<div class="content-item part4">
+		<a class="anchor" id="part4"></a>
+		<div class="subheader center">Part 4: Handling self-collisions</div>
+
+		<p>Up until now, the cloth is able to handle collisions with other objects. However, when it collides with itself, it clips through itself and often falls through the substrate.</p>
+
+		<p>To solve this issue, we implement self-collision with spatial hashing. Spatial-hashing maps floats to <span class="code">candidates</span> (vectors of pointers to point masses). Each float represents a unique numbered box volume in the scene and the <span class="code">candidates</span> contains all of the point masses that are in that 3D box volume. For each point mass, we query the hash table for all the point masses it shares a 3D volume with, and then apply a repulsive collision force if any pair is too close to each other. </p>
+
+		<h3>Task 1: Cloth::hash_position</h3>
+
+		<p>Given a 3D position, <span class="code">Cloth::hash_position</span> returns its hash representing the 3D box volume to which it belongs. We first partition the 3D space into 3D boxes with dimensions $w \cdot h \cdot t$ such that </p>
+
+		<ul>
+			<li><span class="code">w = 3 * width / num_width_points </span></li>
+			<li><span class="code">h = 3 * height / num_height_points </span></li>
+			<li><span class="code">t = max(w, h)</span></li>
+		</ul>
+
+		<p>Once the boxes have been defined, calculate the $x$,$y$,$z$ indices of the box the point is in. </p>
+
+		<ul>
+			<li><span class="code">boxX = floor(pos.x / w)</span></li>
+			<li><span class="code">boxY = floor(pos.y / h)</span></li>
+			<li><span class="code">boxZ = floor(pos.z / t)</span></li>
+		</ul>
+
+		<p>This produces the 3D coordinates <span class="code">boxX</span>,  <span class="code">boxY</span>,  <span class="code">boxZ</span>. We then convert it to a 1D value taking into account the number of boxes in the $X$, $Y$, and $Z$ axes. </p>
+
+		<h3>Task 2: Cloth::build_spatial_map</h3>
+
+		<p>Now that we have a hash function for each position, we use it to build the spatial map. For each point mass, we compute the hash of its position. With this hash as the key, we insert the point mass into the vector of point masses, storing the vector as the value in the map. If this vector does not yet exist, we first initialize it before inserting the point mass. By the end, the map should be populated with the 3D box volumes and their corresponding point masses that they contain. </p>
+
+		<h3>Task 3: Cloth::self_collide</h3>
+
+		<p><span class="code">Cloth::self_collide</span> handles the self-collisions for a given point mass <span class="code">pm</span> . First, we look up potential candidates for collision. We hash the point mass's position, and then, using the hash table, we retrieve the vector of point masses that have the same hash. </p>
+
+		<p>Then, for each candidate point mass in the vector, we check whether they are within $2 \cdot thickness$ distance apart. If so, we compute a correction vector to apply to <span class="code">pm</span>. The final correction vector accumulates all the pairwise correction vectors. We take the average, subtract <span class="code">simulation_steps</span>, and then apply this correction to the position of <span class="code">pm</span>.</p>
+
+		<p>Once we have finished <span class="code">::build_spatial_map</span> and <span class="code">Cloth::self_collide</span>, we update <span class="code">Cloth::simulate</span> to construct the spatial map and then handle self-collisions for each point mass.</p>
+
+		<p>Having completed this, we can see the process of the cloth falling and colliding with itself in a realistic manner without clipping malfunctions.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part4_initial.PNG" class="single-image" /><br />
+					<span>Figure 30: selfCollision.json with cloth in the initial state</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_mid1.PNG" class="single-image" /><br />
+					<span>Figure 31: selfCollision.json with cloth beginning to fall</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_mid2.PNG" class="single-image" /><br />
+					<span>Figure 32: selfCollision.json in the middle of falling</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_mid3.PNG" class="single-image" /><br />
+					<span>Figure 33: selfCollision.json almost finished falling</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_resting.PNG" class="single-image" /><br />
+					<span>Figure 34: selfCollision.json with the cloth in the final resting position</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<h3>Experimenting with Parameters</h3>
+
+		<p>When we vary the $k_s$ and density of the cloth, its properties change, affecting its movement.</p>
+
+		<p>As $k_s$ increases, the cloth is more rigid, with fewer folds. When it falls, it folds on itself, forming large, distinct layers as shown below. Because higher $k_s$ causes the strings to be stronger, more force is required to compress or stretch the springs from their rest length, forming fewer folds and wrinkles in the simulation.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part4_ks-100000-mid.PNG" class="single-image" /><br />
+					<span>Figure 35: selfCollision.json with $k_s = 100000 N/m$ in the middle of falling.</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_ks-100000-resting.PNG" class="single-image" /><br />
+					<span>Figure 36: selfCollision.json with $k_s = 100000 N/m$ in the final resting position</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>On the other hand, as $k_s$ decreases, many ripples form when the cloth falls on itself. In its resting state, the wrinkles and folds have distorted the shape of the cloth. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part4_ks-1-mid.PNG" class="single-image" /><br />
+					<span>Figure 37: selfCollision.json with $k_s = 1 N/m$ in the middle of falling.</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_ks-1-resting.PNG" class="single-image" /><br />
+					<span>Figure 38: selfCollision.json with $k_s = 1 N/m$ in the final resting position</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<p>Inversely, as density increases, the cloth wrinkles more, forming smaller wrinkles. This occurs due to higher density, meaning higher mass, more force acting on the cloth, and thus, more self-collisions. Therefore, at lower densities, the cloth has less mass, meaning less force weighing on it. As a result, there are fewer self-collisions and fewer folds.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part4_density-100000-mid.PNG" class="single-image" /><br />
+					<span>Figure 39: selfCollision.json with density $ = 100000 g/cm^2$ in the middle of falling.</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_density-100000-resting.PNG" class="single-image" /><br />
+					<span>Figure 40: selfCollision.json with density $ = 100000 g/cm^2$ in the final resting position</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part4_density-1-mid.PNG" class="single-image" /><br />
+					<span>Figure 41: selfCollision.json with density $ = 1 g/cm^2$ in the middle of falling.</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part4_density-1-resting.PNG" class="single-image" /><br />
+					<span>Figure 42: selfCollision.json with density $ = 1 g/cm^2$ in the final resting position</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<br /><hr />
+	</div>
+
+	<div class="content-item part5">
+		<a class="anchor" id="part5"></a>
+		<div class="subheader center">Part 5: Shaders</div>
+		<p>A shader is a program written in a specialized programming language such as GLSL (OpenGL Shading Language) that runs on the GPU rather than CPU to accelerate rendering processes. In this project, we use vertex and fragment shaders which work together to create lighting and material effects. Vertex shaders process vertices of objects, applying transforms to them; they output the transformed vertex in addition to other data for use in the fragment shader. Fragment shaders process the individual pixels or samples of pixels (fragments) produced from rasterizing geometric primitives. Given geometric attributes of the fragment calculated by the vertex shader, they output its final color based on the material properties and lighting. The combination of the vertex and fragment shaders allow the GPU to efficiently process geometric and shading calculations to render realistic lighting and material effects in real time. </p>
+
+		<h3>Task 1: Diffuse Shading</h3>
+
+		<p>To implement diffuse shading, we create a fragment shader. The <span class="code">main</span> method of <span class="code">Diffuse.frag</span> outputs the color of the surface according to the Lambertian (diffuse) lighting formula: </p>
+
+		<p>$$L_d = k_d (1/r^2) max(0, n \cdot l)$$</p>
+
+		<ul>
+			<li>$L_d = $ diffusely reflected light</li>
+			<li>$k_d = $ diffuse coefficient</li>
+			<li>$r = $ radius from the light position to the vertex</li>
+			<li>$n = $ normal vector of the fragment</li>
+			<li>$l = $ direction of the incoming light at the point being shaded</li>
+		</ul>
+
+		<p>Following this equation, we first calculate the radius $r$, the distance from the light source to the vertex. The intensity of the light reaching the fragment is $1/r^2$. To compute the Lambertian shading component, we normalize the normal vector of the fragment and the radius, and then take the <span class="code">max</span> between 0 and the dot product of the vectors. Finally, we combine the intensity and Lambertian shading factor to determine the final color of the fragment, which is assigned to <span class="code">out_color</span>. Since the <span class="code">out_color</span> has an alpha channel but we do not use the alpha channel in this shading mode, we set it to 1 (maximum) arbitrarily.</p>
+
+		<p>Having completed this method, we see the resulting realistic diffuse shading of the cloth.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part5_diffuse.PNG" class="single-image" /><br />
+					<span>Figure 43: sphere.json with diffuse shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+
+		<h3>Task 2: Blinn-Phong Shading</h3>
+
+		<p>The Blinn-Phong shading model calculates the color of a pixel based on diffuse reflection, specular reflection, and ambient reflection. Diffuse reflection represents the uniform scattering of light when it strikes a surface, allowing Blinn-Phong shading to account for the angle between this point of intersection and the light source. Furthermore, we are able to incorporate the perspective and viewing angle into the shading by using specular reflection. Specular reflection refers to highlights on surfaces when light reflects off them; the perception of specular reflection depends on the angle between the viewer's direction and the direction of reflection. In addition, ambient lighting, indirect illumination scattering throughout the environment, makes the object more realistic and contributes to the overall brightness of the scene. </p>
+
+		<p>Building off the diffuse fragment shader in Part 5 Task 1, we add specular and ambient shading, using the Blinn-Phong shading equation:</p>
+
+		<p>$$L = k_a I_a + k_d (I / r^2) max(0, n \cdot l) + k_s (I/ r^2) max(0, n \cdot h)^p$$</p>
+
+		<ul>
+			<li>$L = $ total light reflected by the surface</li>
+			<li>$k_a = $ ambient reflection coefficient, determining the contribution of ambient light to the surface's color</li>
+			<li>$I_a = $ intensity of the ambient light</li>
+			<li>$k_d = $diffuse reflection coefficient, determining the amount of light diffusely reflected by the surface</li>
+			<li>$I = $intensity of the light source</li>
+			<li>$r = $ distance between the light source and the surface</li>
+			<li>$n = $ normalized surface normal</li>
+			<li>$l = $ normalized vector pointing from the vertex to the light source</li>
+			<li>$k_s = $ specular reflection coefficient, determining the amount of light specularly reflected by the surface</li>
+			<li>$h = $ normalized half vector between the viewer's direction and the light direction </li>
+			<li>$p = $ specular exponent, determining the size and sharpness of the specular highlight</li>
+		</ul>
+
+		<p>To match the images in the spec as closely as possible, we settled on the following constant values: $k_s=0.5$, $\rho=100$, $k_a=0.1$, $k_d=1$. </p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/part5_phong.PNG" class="single-image" /><br />
+					<span>Figure 44: sphere.json with Blinn-Phong shading</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part5_phong-ambient.PNG" class="single-image" /><br />
+					<span>Figure 45: sphere.json with only ambient shading</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part5_phong-diffuse.PNG" class="single-image" /><br />
+					<span>Figure 46: sphere.json with only diffuse shading</span>
+				</div>
+			</td>
+			<td>
+				<div class="center">
+					<img src="images/part5_phong-specular.PNG" class="single-image" /><br />
+					<span>Figure 47: sphere.json with only specular shading</span>
+				</div>
+			</td>
+		</tr>
+		</table>
+		<br /><hr />
+	</div>
+
+	<h3>Task 3: Texture Mapping</h3>
+
+	<p>To implement texture mapping, we modify the The <span class="code">main</span> method of <span class="code">Texture.frag</span> to set <span class="code">out_color</span> to the value at the corresponding texture space coordinate. We use the built-in function <span class="code">texture(sampler2D tex, vec2 uv)</span> to sample uniformly from the texture map <span class="code">u_texture_1</span> at texture space coordinate <span class="code">v_uv</span>. </p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_texture.PNG" class="single-image" /><br />
+				<span>Figure 48: sphere.json with texture-mapping</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<p>For our custom texture, we cropped an image to a square then resized it to 512x512 pixels (the same as the existing texture files). This image is <span class="code">cows.jpeg</span> which is a custom edited image of passengers on a train overlaid by cow heads. The impetus for making this image was largely out of curiosity for creating something random. The images below show the sphere with this texture map applied, as well as the raw texture map.</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_texture-custom.PNG" class="single-image" /><br />
+				<span>Figure 49: sphere.json with custom texture-mapping</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_texturemap-custom.png" class="single-image" /><br />
+				<span>Figure 50: Our custom texture</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<h3>Task 4: Displacement and Bump Mapping</h3>
+
+	<p>In addition to textures and lighting, we can also add height details to a mesh. There are two main ways to accomplish this, each with slightly different results. Bump mapping uses the normal vectors for each object to provide an illusion of depth, while displacement mapping modifies the geometry of the underlying mesh to add these height details.</p>
+
+	<p>As with before, for bump mapping we create a fragment shader<span class="code">Bump.frag</span>. In this shader, we mainly utilize the tangent-bitangent-normal (TBN) matrix, which is $TBN = [t b n]$ where $b = n \times t$, $t$ is the tangent vector, and $n$ is the normal vector. We then compute a differential change in the $u$ and $v$ texture coordinates and scale by some constant factor. Notably, the $(u, v)$ coordinates are encoded into “heights” by <span class="code">texture()</span> - since we only provide the illusion of height, these “heights” are really colors. The differential changes in $(u, v)$ coordinate colors are then mapped to a normal vector via $n_o=(-dU, -dV, 1)$ and the resulting normal vector is $n_d=TBN \cdot n_o$.</p>
+
+	<p>From this resulting normal vector, we perform Blinn-Phong shading as in the previous subpart but use this result instead of the normal vector provided by the model/texture. The result of this transformation is as seen below - first on the default texture and then on a custom texture (the same as task 3).</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_bump.PNG" class="single-image" /><br />
+				<span>Figure 51: sphere.json with bump mapping</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_bump-sphere.PNG" class="single-image" /><br />
+				<span>Figure 52: sphere.json with bump mapping (only sphere)</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_bump-custom.PNG" class="single-image" /><br />
+				<span>Figure 53: sphere.json with custom bump mapping</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_bump-custom-sphere.PNG" class="single-image" /><br />
+				<span>Figure 54: sphere.json with custom bump mapping (only sphere)</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<p>For displacement mapping, we perform bump mapping in a duplicated fragment shader <span class="code">Displacement.frag</span>. In addition, we displace each vertex position in the mesh by some amount in the direction of the normal vector. This amount is the product of the height scaling constant $k_h$ and the height from the texture map (retrieved with the builtin function <span class="code">texture()</span>).</p>
+
+	<p>Our implementation is careful to use the <span class="code">v_position</span> vector position instead of the input position vectors stored in <span class="code">in_position</span>. This allows the normal-based height displacement to be applied to the position that is rendered to the screen by OpenGL (<span class="code">gl_Position</span>).</p>
+
+	<p>The result of displacement mapping is shown below on a custom texture (the same as was used for task 3).</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_displacement.PNG" class="single-image" /><br />
+				<span>Figure 55: sphere.json with displacement mapping</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_displacement-sphere.PNG" class="single-image" /><br />
+				<span>Figure 56: sphere.json with displacement mapping (only sphere)</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<p>We can then modulate the <span class="code">-a</span> and <span class="code">-o</span> parameters passed to the program. The images below show (a) $a=16, o=16$ and (b) $a=128, o=128$. Notably, (a) is much smoother than (b). This is likely because with a more coarse mesh, the output displacement on each point will affect the overall appearance more (as there would be fewer uniform points. Conceptually, this is similar to the law of large numbers where with small sample sizes the outliers stand out/affect the dataset more than with large sample sizes.</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_displacement-16.PNG" class="single-image" /><br />
+				<span>Figure 57: sphere.json with displacement mapping with $a = 16$ and with $o = 16$</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_displacement-128.PNG" class="single-image" /><br />
+				<span>Figure 58: sphere.json with displacement mapping with $a = 128$ and with $o = 128$</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<h3>Task 5: Environment-mapped Reflections</h3>
+
+	<p>Environment-mapped reflections create a mirror finish which reflects from the camera onto a surface and out into an environment map. In this case, our environment map is a cubemap texture image which can be sampled again using the builtin <span class="code">texture()</span> function.</p>
+
+	<p>First, compute the outgoing radiance $w_o$:</p>
+
+	<p>$$w_o=v_{camera} - v$$</p>
+
+	<p>Then, reflect the radiance to the incoming radiance $w_i$:</p>
+
+	<p>$$w_i=-w_o + (2w_0 \cdot n * n)$$</p>
+
+	<p>This incoming radiance $w_i$ is then used to sample the cubemap, and the following images are produced:</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_mirror.PNG" class="single-image" /><br />
+				<span>Figure 59: sphere.json with environment-mapped reflections</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_mirror-plane.PNG" class="single-image" /><br />
+				<span>Figure 60: sphere.json with environment-mapped reflections with the cloth above the sphere</span>
+			</div>
+		</td>
+		<td>
+			<div class="center">
+				<img src="images/part5_mirror-sphere.PNG" class="single-image" /><br />
+				<span>Figure 61: sphere.json with environment-mapped reflections (only sphere)</span>
+			</div>
+		</td>
+	</tr>
+	</table>
+
+	<h3>Extra Credit: Rainbow Mirror</h3>
+
+	<p>We chose to implement our own shader, which we have dubbed “Rainbow Mirror”. This is because it combines the existing mirror shader with a rainbow effect to create a mirror that is also chromatically varying. The effect is shown in the image below.</p>
+
+	<table><tr>
+		<td>
+			<div class="center">
+				<img src="images/part5_ec-rainbowmirror.PNG" class="single-image" /><br />
+				<span>Figure 62: sphere.json with rainbow mirror shading</span>
+			</div>
+		</td>
+		<td>
+	</tr>
+	</table>
+
+	<p>To implement this, we modified <span class="code">Custom.frag</span> to perform our fragment shading and did not change <span class="code">Custom.vert</span>. In this file, we copy in the mirror implementation and multiply that by some constant less than one (here 0.5). We then take our rainbow effect and multiply that by another constant less than one, with the added condition that the two constants should sum to one. This effectively averages two different shaders together to get half of each shader combined. If we added the shaders, we may have clipping from colors over the maximum value, or at best incorrect colors.</p>
+
+	<p>The rainbow effect is achieved by multiplying <span class="code">u_model</span> by <span class="code">v_position</span>. This creates an effective depth heatmap which appears chromatic because it spans the whole model (i.e. <span class="code">u_model</span>).</p>
+
+	<div class="content-item ec">
+		<a class="anchor" id="ec"></a>
+		<div class="subheader center">Extra Credit: Additional cloth simulation features</div>
+
+		<h3>Cube Collision Object</h3>
+
+		<p>As part of this project, we implement collisions for our cloth with spheres and planes. These are called collision objects (because the cloth collides into them) and can be extended into other shapes. In this extra credit section, we have implemented a cube collision object.</p>
+
+		<p>To accomplish this, we started by adding a <span class="code">Cube</span> class to the <span class="code">collision</span> folder (where the sphere and plane classes reside). To be a collision object, this new class must extend <span class="code">CollisionObject</span> and as such implement the void methods <span class="code">collide()</span> and <span class="code">render()</span>. </p>
+
+		<p>In <span class="code">collide()</span>, we determine if the position of a given point mass will be within the cube on its next time step (i.e. its <span class="code">position</span> is within the cube). To check this, we find the minimum and maximum $x$, $y$, and $z$ coordinates of the cube. These are taken from the class’s two data variables, a vector representing the center point of the cube <span class="code">center</span> and a side length <span class="code">edge</span>. Note that each corner is a projected distance <span class="code">edge / 2</span> away from the center (on any given single axis). These minimum and maximum coordinates are then checked against the position of the point mass. If the point mass will be inside the cube, we stop its movement at its current position (<span class="code">last_position</span>).</p>
+
+		<p>In <span class="code">render()</span> we have to effectively rasterize our cube into many triangles for OpenGL to render. This involves finding the position of each corner of the cube (again using <span class="code">center</span> and <span class="code">edge / 2</span>) and drawing a path between them to triangularize each face of the cube sequentially. Each position in this sequence is appended as a column in a <span class="code">MatrixXf</span> (variable-size matrix), then “uploaded” to the shader as the <span class="code">in_position</span> matrix. The shader then draws the scene using the type flag <span class="code">GL_TRIANGLE_STRIP</span> which draws a continuous strip of triangles (instead of individual triangles, as <span class="code">GL_TRIANGLES</span> would).</p>
+
+		<p>Now to render a scene with a cube, we need to create a scene with a cube in it. Since we want a similar cloth setup to the sphere collision object, we duplicate that file and modify it to be of name <span class="code">cube</span> with <span class="code">center</span> and <span class="code">edge</span> as properties.</p>
+
+		<p>To parse this JSON, in <span class="code">main.cpp</span> we add a “cube” (aliased as <span class="code">CUBE</span>) to the <span class="code">VALID_KEYS</span> of collision objects. In <span class="code">loadObjectsFromFile()</span> we find the parameters in the JSON file and translate them to C++ primitives, then into the <span class="code">Cube</span> object.</p>
+
+		<p>Before this class can be compiled, we also have to add its header file to the CMake configuration file located in the <span class="code">src</span> folder.</p>
+
+		<p>The result of this code is the images below. Notice the cloth falling onto the top surface of the cube and loosely wrapping around the sides, as would be realistically expected.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/ec_cube-normal.PNG" class="single-image" /><br />
+					<span>Figure 63: cube.json with normal shading</span>
+				</div>
+			</td>
+			<td>
+			<td>
+				<div class="center">
+					<img src="images/ec_cube-wireframe.PNG" class="single-image" /><br />
+					<span>Figure 64: wireframe of cube.json</span>
+				</div>
+			</td>
+			<td>
+		</tr>
+		</table>
+
+		<h3>Adjustable Collision Objects</h3>
+
+		<p>The size and location of collision objects (such as spheres and planes) is set by JSON files before the program starts. In the skeleton provided, it is not possible to change these sizes or locations at runtime. To fix this, we implemented adjustable collision objects that can be modified during runtime from the GUI.</p>
+
+		<p>Each time a scene with collision objects is initialized, we create a set of GUI objects in a new panel called “Collision objects”. Each object contains a text input field which controls a scalar value (which often is a component of a vector). As shown below, this is implemented for all three collision objects: sphere, plane, and cube.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/ec_adj-sphere.png" class="single-image" /><br />
+					<span>Figure 65: sphere.json</span>
+				</div>
+			</td>
+			<td>
+			<td>
+				<div class="center">
+					<img src="images/ec_adj-plane.png" class="single-image" /><br />
+					<span>Figure 66: plane.json</span>
+				</div>
+			</td>
+			<td>
+			<td>
+				<div class="center">
+					<img src="images/ec_adj-cube.png" class="single-image" /><br />
+					<span>Figure 67: cube.json</span>
+				</div>
+			</td>
+			<td>
+		</tr>
+		</table>
+
+		<p>To implement this, we add a new <span class="code">Window</span> with a <span class="code">GridLayout</span> to the screen hierarchy. We then add <span class="code">FloatBox</span>es to each in rows. These are the input boxes and are initialized to a certain value. When modified, they call a callback function specified by <span class="code">setCallback</span>. We pass in the <span class="code">CollisionObject</span> to this callback and a field is modified. For existing collision objects, the visibility of some fields did have to be changed to enable this functionality.</p>
+
+		<p>Notably, we cannot access object-specific fields such as the sphere’s center through a <span class="code">CollisionObject</span>. To solve this, we use <span class="code">dynamic_cast</span> to attempt to cast to a superclass. If unsuccessful (i.e. the variable is <span class="code">NULL</span>) we continue to the next possible collision object (and repeat).</p>
+
+		<h3>Wind Simulation</h3>
+
+		<p>To add a wind effect to our cloth, we first thought about how we could approach this issue. It would be possible to simulate wind as a particle/gas and perform a full fluid dynamics simulation on the air. However, that would be computationally expensive. As such, we decided to perform an approximation of wind instead. After trying several ideas, we devised an idea to add some forces to the spring correction forces, based on the hint in the spec that wind is a spatially varying force.</p>
+
+		<p>To implement this, we add a <span class="code">rand()</span> amount of force to each point. This means we add some force to each point, and it varies in space. Given no other forces, this should in time move the cloth with the same net force. However, given a collision object the edges furthest away from the object will be pushed away and curl away first, leading to a fairly realistic wind effect estimation. To make the wind direction controllable, we can add to each of the three force components separately, scaled by different constants.</p>
+
+		<p>This produces the wind effect shown below. The wind direction in the left image is from the camera, while the wind direction in the right image is from underneath the cube.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/ec-wind_y.png" class="single-image" /><br />
+					<span>Figure 68: cube.json with wind along the $y$-axis</span>
+				</div>
+			</td>
+			<td>
+			<td>
+				<div class="center">
+					<img src="images/ec-wind_z.PNG" class="single-image" /><br />
+					<span>Figure 69: cube.json with wind along the $z$-axis</span>
+				</div>
+			</td>
+			<td>
+		</tr>
+		</table>
+
+		<p>These constants could be set in code, however to add customizability we also implemented a GUI feature which allows the user to set a 0-100% wind speed. This was tuned such that a 50-75% wind speed could pull the cloth away from any object tested, and 100% still moves the object in human speed (i.e. on the second scale). To minimize computation, there is also an enable button. The implementation of these GUI features is almost identical to the “Adjustable Collision Objects” extra credit section above, so refer to that section for GUI details.</p>
+
+		<table><tr>
+			<td>
+				<div class="center">
+					<img src="images/ec_wind-gui.PNG" class="single-image" /><br />
+					<span>Figure 70: GUI for the wind feature</span>
+				</div>
+			</td>
+			<td>
+		</tr>
+		</table>
+
+		<h3>Screenshot Hotkey</h3>
+
+		<p>A feature of Homework 1 which was very useful in completing the project (and writing the documentation) was a screenshot hotkey feature which could be quickly pressed to take a uniform and high-quality screenshot of the whole image. Although not an enumerated extra credit portion, we felt this section would be useful to outline as it represents an improvement made to the project. Note that much of the code is taken from homework 1, though improved through modification.</p>
+
+		<p>To take a screenshot of a window, we first have to retrieve all the pixels being displayed on the desired window. OpenGL has a function <span class="code">glReadPixels</span> which does exactly this, for some <span class="code">width</span> and <span class="code">height</span> number of pixels (rectangularly). For the current window, these dimensions can be retrieved from the <span class="code">GL_VIEWPORT</span> integer parameter via <span class="code">glGetIntegerv</span>. This reads into 4-element <span class="code">GLint</span> (alias <span class="code">int</span>) which holds the current x position, current y position, width, and height. From <span class="code">glReadPixels</span> we read into a vector of bytes (alias <span class="code">unsigned char</span>) which is three times the number of pixels. This is to hold a red, green, and blue channel value for each pixel (i.e. read with format <span class="code">GL_RGB</span>.</p>
+
+		<p>Intuition tells us that this format should be fine and that we can write this to a png or similar. However, there are two issues with this. Firstly, the pixels are upside down due to convention with OpenGL. As such, we must flip the image horizontally. Secondly, lodepng (the png encoding library used) expects an RGBA (the A being the alpha channel) value, which would be four bytes per pixel. As such, we <span class="code">memcpy</span> from the pixels read by <span class="code">glReadPixels</span>into the first three elements of each four-element group. The fourth is 255 (maximum) by default at initialization, which means all images are opaque. This has the beneficial side effect of removing transparent backgrounds. With some arithmetic, these two can be combined into one set of copying operations.</p>
+
+		<p>As a side note, we also have to set the <span class="code">GL_UNPACK_ALIGNMENT</span> and <span class="code">GL_PACK_ALIGNMENT</span> to 1 (instead of the default of 4). This is because we want to read RGB values from the screen buffer, and if we are aligned to 4 bytes that will not function as expected. These are returned to a value of 4 after the function returns. To avoid memory leaks we also clear all intermediate vectors.</p>
+
+		<p>By putting a function call to this screenshot function in <span class="code">keyCallbackEvent</span>, we can trigger a screenshot on a keystroke (we chose “s” or “S” for “save” since “p” was already taken).</p>
+
+		<br /><hr />
+	</div>
+
+</div>
+</body>
 </html>
